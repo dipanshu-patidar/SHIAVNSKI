@@ -1,0 +1,365 @@
+{
+  "info": {
+    "name": "Shiavnski AI Voice Agent Management API",
+    "_postman_id": "7b8921a4-9e32-4cfb-b5d1-shiavnski001",
+    "description": "Comprehensive Postman Collection for the Shiavnski Technologies AI Voice Agent Management System.\nCovers Authentication, Agent Management, Outbound Call Dispatch, Mock Lifecycle Simulation, Dynamic Dashboard Metrics, and Retell Webhooks.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    },
+    {
+      "key": "agentId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "callId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "System Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Check if API server, database, and telephony provider are healthy."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alex.test@example.com\",\n  \"password\": \"Password123!\",\n  \"fullName\": \"Alex Test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Registers a new user and returns HttpOnly auth cookie."
+          }
+        },
+        {
+          "name": "Login User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@shiavnski.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Authenticates user credentials and sets HttpOnly auth_token cookie."
+          }
+        },
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Retrieves the currently authenticated user's profile."
+          }
+        },
+        {
+          "name": "Logout User",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Clears authentication cookie and ends session."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Voice Agents",
+      "item": [
+        {
+          "name": "List Agents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/agents?page=1&limit=20&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["agents"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "" }
+              ]
+            },
+            "description": "List authenticated user's voice agents with pagination and search."
+          }
+        },
+        {
+          "name": "Create Agent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Appointment Scheduling Assistant\",\n  \"description\": \"Handles inbound patient appointment scheduling and reminders\",\n  \"voiceId\": \"11labs-Adrian\",\n  \"language\": \"en-US\",\n  \"systemPrompt\": \"You are a professional appointment scheduling agent for Shiavnski Health.\",\n  \"responsiveness\": 1.0,\n  \"interruptionSensitivity\": 0.8,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["agents"]
+            },
+            "description": "Creates a new voice agent persona scoped to the authenticated user."
+          }
+        },
+        {
+          "name": "Get Agent Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/agents/{{agentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["agents", "{{agentId}}"]
+            },
+            "description": "Retrieves configuration for a specific agent owned by the authenticated user."
+          }
+        },
+        {
+          "name": "Update Agent",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Scheduler Bot\",\n  \"responsiveness\": 0.9,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/agents/{{agentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["agents", "{{agentId}}"]
+            },
+            "description": "Updates configuration settings for an existing agent."
+          }
+        },
+        {
+          "name": "Delete Agent",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/agents/{{agentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["agents", "{{agentId}}"]
+            },
+            "description": "Deletes an agent (cascade safe)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Call Management & Simulation",
+      "item": [
+        {
+          "name": "Dispatch Outbound Call",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Idempotency-Key",
+                "value": "idem_sample_12345"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agentId\": \"{{agentId}}\",\n  \"toNumber\": \"+14155552671\",\n  \"dynamicVariables\": {\n    \"customer_name\": \"Sarah Connor\",\n    \"account_type\": \"Premium Gold\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/calls",
+              "host": ["{{baseUrl}}"],
+              "path": ["calls"]
+            },
+            "description": "Dispatches an outbound call. In MOCK mode, creates a persisted mock call with call_mock_* ID."
+          }
+        },
+        {
+          "name": "List Call Records",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/calls?page=1&limit=20&status=&agentId=",
+              "host": ["{{baseUrl}}"],
+              "path": ["calls"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "" },
+                { "key": "agentId", "value": "" }
+              ]
+            },
+            "description": "Lists calls for the authenticated user with masked phone numbers and status filters."
+          }
+        },
+        {
+          "name": "Get Call Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/calls/{{callId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["calls", "{{callId}}"]
+            },
+            "description": "Retrieves comprehensive call record with masked caller/recipient IDs and dynamic variables."
+          }
+        },
+        {
+          "name": "Simulate Mock Call Step",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/calls/{{callId}}/simulate-step",
+              "host": ["{{baseUrl}}"],
+              "path": ["calls", "{{callId}}", "simulate-step"]
+            },
+            "description": "Deterministically transitions a mock call: INITIATED -> ONGOING -> ENDED."
+          }
+        },
+        {
+          "name": "Get Dashboard Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/calls/stats?startDate=&endDate=&agentId=&status=",
+              "host": ["{{baseUrl}}"],
+              "path": ["calls", "stats"],
+              "query": [
+                { "key": "startDate", "value": "" },
+                { "key": "endDate", "value": "" },
+                { "key": "agentId", "value": "" },
+                { "key": "status", "value": "" }
+              ]
+            },
+            "description": "Returns aggregated KPIs (total, completed, failed, duration, success rate, recent calls) scoped to the user."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Telephony Provider & Webhooks",
+      "item": [
+        {
+          "name": "Provider Safe Diagnostic Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/provider/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["provider", "status"]
+            },
+            "description": "Returns sanitized configuration status without exposing private keys or credentials."
+          }
+        },
+        {
+          "name": "Retell Connectivity Check",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/provider/verify",
+              "host": ["{{baseUrl}}"],
+              "path": ["provider", "verify"]
+            },
+            "description": "Performs harmless read-only Retell API connectivity check without placing calls or purchasing numbers."
+          }
+        },
+        {
+          "name": "Retell Webhook Ingestion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-retell-signature",
+                "value": "<HMAC_SHA256_SIGNATURE>"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call_ended\",\n  \"call\": {\n    \"call_id\": \"call_sample_webhook\",\n    \"call_status\": \"ended\",\n    \"start_timestamp\": 1700000000000,\n    \"end_timestamp\": 1700000065000,\n    \"duration_ms\": 65000,\n    \"disconnection_reason\": \"user_hangup\",\n    \"transcript\": \"User: Hello. Agent: Hi, how can I help?\",\n    \"recording_url\": \"https://api.retellai.com/recordings/sample.wav\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/retell",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "retell"]
+            },
+            "description": "Cryptographically verified webhook ingestion endpoint. Handles idempotency, out-of-order protection, and orphan events."
+          }
+        }
+      ]
+    }
+  ]
+}
