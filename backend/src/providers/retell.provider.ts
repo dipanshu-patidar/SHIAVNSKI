@@ -356,6 +356,20 @@ export class RetellVoiceProvider implements IVoiceProvider {
   }
 
   /**
+   * Explicitly stop/terminate an active call in Retell AI.
+   */
+  async endCall(providerCallId: string): Promise<void> {
+    try {
+      await this.client.call.stop(providerCallId);
+    } catch (error: any) {
+      console.warn(
+        `[RetellVoiceProvider] Retell stopCall notice for ${providerCallId}:`,
+        error?.message || error
+      );
+    }
+  }
+
+  /**
    * Retrieve Call details from Retell AI.
    */
   async getCallDetails(providerCallId: string): Promise<ProviderCallDetails> {

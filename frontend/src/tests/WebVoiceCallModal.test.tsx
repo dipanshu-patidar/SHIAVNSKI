@@ -10,6 +10,7 @@ vi.mock('../api/call.api', () => ({
   callApi: {
     startWebCall: vi.fn(),
     syncCall: vi.fn(),
+    endCall: vi.fn().mockResolvedValue(null),
   },
 }));
 

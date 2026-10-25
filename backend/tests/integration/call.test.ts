@@ -425,4 +425,28 @@ describe('Outbound Call Management API Integration Tests (Phase 3)', () => {
     expect(resPast.status).toBe(200);
     expect(resPast.body.data.totalCalls).toBeGreaterThanOrEqual(1);
   });
+
+  it('EXPLICIT TERMINATION: POST /api/calls/:id/end immediately ends active call session', async () => {
+    // 1. Create a call
+    const createRes = await request(app)
+      .post('/api/calls')
+      .set('Cookie', userACookie)
+      .send({
+        agentId: userAAgentId,
+        toNumber: '+14155559876',
+      });
+    expect(createRes.status).toBe(201);
+    const callId = createRes.body.data.call.id;
+
+    // 2. Terminate the call
+    const endRes = await request(app)
+      .post(`/api/calls/${callId}/end`)
+      .set('Cookie', userACookie)
+      .send({ durationSeconds: 12 });
+
+    expect(endRes.status).toBe(200);
+    expect(endRes.body.data.call.status).toBe('ENDED');
+    expect(endRes.body.data.call.durationSeconds).toBe(12);
+    expect(endRes.body.data.call.disconnectionReason).toBe('user_hangup');
+  });
 });

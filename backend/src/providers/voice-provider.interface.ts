@@ -90,5 +90,6 @@ export interface IVoiceProvider {
   createWebCall(params: CreateWebCallParams): Promise<ProviderWebCallResult>;
   getCallDetails(providerCallId: string): Promise<ProviderCallDetails>;
   deleteRecording(providerCallId: string): Promise<DeleteRecordingResult>;
+  endCall?(providerCallId: string): Promise<void>;
 }
 

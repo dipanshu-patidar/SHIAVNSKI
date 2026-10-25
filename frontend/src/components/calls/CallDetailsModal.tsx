@@ -40,6 +40,7 @@ export const CallDetailsModal: React.FC<CallDetailsModalProps> = ({
   const [copiedId, setCopiedId] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [ending, setEnding] = useState(false);
 
   // Deletion Confirmation Modal State
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -50,7 +51,49 @@ export const CallDetailsModal: React.FC<CallDetailsModalProps> = ({
   useEffect(() => {
     setActiveCall(call);
     setShowDeleteConfirm(false);
-  }, [call]);
+    if (call && isOpen && (call.status === 'ONGOING' || call.status === 'INITIATED')) {
+      if (typeof callApi?.syncCall === 'function') {
+        Promise.resolve(callApi.syncCall(call.id))
+          .then((updated) => {
+            if (updated) {
+              setActiveCall(updated);
+              onCallUpdated?.(updated);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [call, isOpen]);
+
+  const handleEndCall = async () => {
+    if (!activeCall || ending) return;
+    setEnding(true);
+    try {
+      if (typeof callApi?.endCall === 'function') {
+        const updated = await Promise.resolve(callApi.endCall(activeCall.id));
+        if (updated) {
+          setActiveCall(updated);
+          onCallUpdated?.(updated);
+          success('Call ended successfully', 'Call Terminated');
+        }
+      }
+      setTimeout(async () => {
+        try {
+          if (typeof callApi?.syncCall === 'function') {
+            const synced = await Promise.resolve(callApi.syncCall(activeCall.id));
+            if (synced) {
+              setActiveCall(synced);
+              onCallUpdated?.(synced);
+            }
+          }
+        } catch {}
+      }, 2000);
+    } catch (err: any) {
+      error(err?.response?.data?.message || err?.message || 'Failed to end call');
+    } finally {
+      setEnding(false);
+    }
+  };
 
   if (!isOpen || !activeCall) return null;
 
@@ -228,6 +271,19 @@ export const CallDetailsModal: React.FC<CallDetailsModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {(activeCall.status === 'ONGOING' || activeCall.status === 'INITIATED') && (
+              <button
+                type="button"
+                onClick={handleEndCall}
+                disabled={ending}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/30 transition-all disabled:opacity-50"
+                title="End Call Now"
+              >
+                <PhoneOff className="w-3.5 h-3.5" />
+                <span>{ending ? 'Ending...' : 'End Call'}</span>
+              </button>
+            )}
+
             <button
               onClick={handleSyncCall}
               disabled={syncing}

@@ -360,15 +360,8 @@ export const WebVoiceCallModal: React.FC<WebVoiceCallModalProps> = ({
 
       // Event: call_ended
       client.on('call_ended', async () => {
-        console.log('[RetellWebClient] Call ended');
-        setConnectionState('ended');
-        setIsAgentSpeaking(false);
-        cleanupCallSession();
-
-        // Trigger post-call backend sync
-        if (activeCallRef.current) {
-          triggerCallSync(activeCallRef.current.id);
-        }
+        console.log('[RetellWebClient] Call ended event received from SDK');
+        await handleEndConversation();
       });
 
       // 4. Start the real Retell WebRTC session with the COMPLETE configuration
@@ -422,28 +415,86 @@ export const WebVoiceCallModal: React.FC<WebVoiceCallModalProps> = ({
     setIsAgentSpeaking(false);
     cleanupCallSession();
 
-    if (activeCall) {
-      triggerCallSync(activeCall.id);
+    const targetCall = activeCallRef.current || activeCall;
+    if (targetCall) {
+      try {
+        if (typeof callApi?.endCall === 'function') {
+          const ended = await Promise.resolve(callApi.endCall(targetCall.id, durationSeconds));
+          if (ended) {
+            setActiveCall(ended);
+            onCallCompleted?.(ended);
+          }
+        }
+      } catch (err) {
+        console.warn('Backend endCall notice:', err);
+      }
+      triggerCallSync(targetCall.id);
     }
   };
 
   /**
-   * Trigger backend sync to retrieve latest transcript & recording
+   * Trigger multi-stage backend sync to retrieve latest transcript & recording
+   * after provider finishes audio recording upload and LLM post-call analysis.
    */
   const triggerCallSync = async (callId: string) => {
     try {
       setSyncingCall(true);
       const synced = await callApi.syncCall(callId);
-      setActiveCall(synced);
-      if (synced.transcriptObject && Array.isArray(synced.transcriptObject)) {
-        setLiveTranscripts(synced.transcriptObject);
+      if (synced) {
+        setActiveCall(synced);
+        if (synced.transcriptObject && Array.isArray(synced.transcriptObject)) {
+          setLiveTranscripts(synced.transcriptObject);
+        }
+        onCallCompleted?.(synced);
       }
-      onCallCompleted?.(synced);
+
+      // If recording or transcript is still processing on provider, schedule follow-up retries
+      if (!synced?.recordingUrl || !synced?.transcriptText) {
+        setTimeout(async () => {
+          try {
+            const retry1 = await callApi.syncCall(callId);
+            if (retry1) {
+              setActiveCall(retry1);
+              if (retry1.transcriptObject && Array.isArray(retry1.transcriptObject)) {
+                setLiveTranscripts(retry1.transcriptObject);
+              }
+              onCallCompleted?.(retry1);
+            }
+
+            if (!retry1?.recordingUrl || !retry1?.transcriptText) {
+              setTimeout(async () => {
+                try {
+                  const retry2 = await callApi.syncCall(callId);
+                  if (retry2) {
+                    setActiveCall(retry2);
+                    if (retry2.transcriptObject && Array.isArray(retry2.transcriptObject)) {
+                      setLiveTranscripts(retry2.transcriptObject);
+                    }
+                    onCallCompleted?.(retry2);
+                  }
+                } catch {}
+              }, 4000);
+            }
+          } catch {}
+        }, 2000);
+      }
     } catch (e) {
       console.warn('Call sync after end completed with notice:', e);
     } finally {
       setSyncingCall(false);
     }
+  };
+
+  /**
+   * Safe modal close: ensure call is terminated if active
+   */
+  const handleModalClose = () => {
+    if (connectionState === 'connected' || connectionState === 'connecting') {
+      handleEndConversation();
+    } else {
+      cleanupCallSession();
+    }
+    onClose();
   };
 
   /**
@@ -520,10 +571,7 @@ export const WebVoiceCallModal: React.FC<WebVoiceCallModalProps> = ({
           </div>
 
           <button
-            onClick={() => {
-              cleanupCallSession();
-              onClose();
-            }}
+            onClick={handleModalClose}
             className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             aria-label="Close modal"
           >
@@ -795,10 +843,7 @@ export const WebVoiceCallModal: React.FC<WebVoiceCallModalProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              cleanupCallSession();
-              onClose();
-            }}
+            onClick={handleModalClose}
             className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700 transition-colors"
           >
             Close Window

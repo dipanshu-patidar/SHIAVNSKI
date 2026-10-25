@@ -3,6 +3,7 @@ import { callService } from '../services/call.service.js';
 import {
   createCallSchema,
   createWebCallSchema,
+  endCallSchema,
   listCallsQuerySchema,
   dashboardMetricsQuerySchema,
 } from '../schemas/call.schema.js';
@@ -108,6 +109,34 @@ export class CallController {
   }
 
   /**
+   * POST /api/calls/:id/end
+   * Explicitly terminate/end an active call session
+   */
+  async endCall(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401, 'UNAUTHORIZED');
+      }
+
+      const callId = req.params.id;
+      const parsedBody = endCallSchema.safeParse(req.body);
+      const durationSeconds = parsedBody.success ? parsedBody.data.durationSeconds : undefined;
+
+      const call = await callService.endCall(req.user.id, callId, durationSeconds);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          call,
+        },
+        message: 'Call terminated successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /api/calls/stats
    * Get aggregated dashboard KPIs and recent calls
    */
@@ -163,6 +192,29 @@ export class CallController {
 
       const callId = req.params.id;
       const result = await callService.deleteCallRecording(req.user.id, callId);
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        message: result.message,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /api/calls/:id
+   * Permanently delete a call record scoped to the authenticated user
+   */
+  async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401, 'UNAUTHORIZED');
+      }
+
+      const callId = req.params.id;
+      const result = await callService.deleteCall(req.user.id, callId);
 
       res.status(200).json({
         success: true,

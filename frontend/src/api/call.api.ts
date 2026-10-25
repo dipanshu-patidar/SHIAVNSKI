@@ -165,6 +165,18 @@ export const callApi = {
     };
   },
 
+  async deleteCall(id: string): Promise<void> {
+    await apiClient.delete(`/calls/${id}`);
+  },
+
+  async endCall(id: string, durationSeconds?: number): Promise<Call> {
+    const res = await apiClient.post<{ success: boolean; data: { call: Call } }>(
+      `/calls/${id}/end`,
+      durationSeconds !== undefined ? { durationSeconds } : {}
+    );
+    return res.data.data.call;
+  },
+
   async syncCall(id: string): Promise<Call> {
     const res = await apiClient.post<{ success: boolean; data: { call: Call } }>(
       `/calls/${id}/sync`

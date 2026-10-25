@@ -35,6 +35,8 @@ const mockInitiatedCall: Call = {
 vi.mock('../api/call.api', () => ({
   callApi: {
     simulateCallStep: vi.fn(),
+    syncCall: vi.fn().mockResolvedValue(null),
+    endCall: vi.fn().mockResolvedValue(null),
   },
 }));
 

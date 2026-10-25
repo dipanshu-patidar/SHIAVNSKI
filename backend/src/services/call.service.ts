@@ -233,8 +233,29 @@ export class CallService {
       prisma.call.count({ where }),
     ]);
 
+    // Reconcile active non-mock calls from remote provider if webhook didn't reach localhost
+    const activeCalls = calls.filter(
+      (c) =>
+        (c.status === CallStatus.ONGOING || c.status === CallStatus.INITIATED) &&
+        !c.providerCallId.startsWith('call_mock_')
+    );
+
+    let enrichedList = calls.map((c) => this.enrichCall(c, true));
+    if (activeCalls.length > 0) {
+      const syncResults = await Promise.allSettled(
+        activeCalls.map((c) => this.syncCallDetails(userId, c.id))
+      );
+      const updatedMap = new Map<string, EnrichedCall>();
+      syncResults.forEach((res) => {
+        if (res.status === 'fulfilled' && res.value) {
+          updatedMap.set(res.value.id, res.value);
+        }
+      });
+      enrichedList = calls.map((c) => updatedMap.get(c.id) || this.enrichCall(c, true));
+    }
+
     return {
-      calls: calls.map((c) => this.enrichCall(c, true)),
+      calls: enrichedList,
       total,
       page,
       limit,
@@ -261,6 +282,17 @@ export class CallService {
 
     if (!call) {
       throw new AppError('Call record not found or access denied', 404, 'CALL_NOT_FOUND');
+    }
+
+    if (
+      (call.status === CallStatus.ONGOING || call.status === CallStatus.INITIATED) &&
+      !call.providerCallId.startsWith('call_mock_')
+    ) {
+      try {
+        return await this.syncCallDetails(userId, call.id);
+      } catch {
+        // Fallback to cached enriched call if remote provider check fails
+      }
     }
 
     return this.enrichCall(call, true);
@@ -338,6 +370,72 @@ export class CallService {
   }
 
   /**
+   * Explicitly terminate / end a call session (both browser web calls and phone calls).
+   * Immediately marks PostgreSQL record as ENDED, records duration and disconnectionReason,
+   * and dispatches stop to voice provider.
+   */
+  async endCall(
+    userId: string,
+    callId: string,
+    durationSeconds?: number
+  ): Promise<EnrichedCall> {
+    const call = await prisma.call.findFirst({
+      where: { id: callId, userId },
+      include: {
+        agent: {
+          select: { id: true, name: true, voiceId: true, language: true },
+        },
+      },
+    });
+
+    if (!call) {
+      throw new AppError('Call record not found or access denied', 404, 'CALL_NOT_FOUND');
+    }
+
+    // Stop provider call if method exists
+    if (this.voiceProvider.endCall && !call.providerCallId.startsWith('call_mock_')) {
+      try {
+        await this.voiceProvider.endCall(call.providerCallId);
+      } catch (err) {
+        console.warn(`[CallService] Provider endCall notice:`, err);
+      }
+    } else if (this.voiceProvider.endCall && call.providerCallId.startsWith('call_mock_')) {
+      try {
+        await this.voiceProvider.endCall(call.providerCallId);
+      } catch (err) {
+        console.warn(`[CallService] Mock provider endCall notice:`, err);
+      }
+    }
+
+    const now = new Date();
+    let calculatedDuration = durationSeconds;
+    if (calculatedDuration === undefined || calculatedDuration <= 0) {
+      if (call.startedAt) {
+        calculatedDuration = Math.max(1, Math.round((now.getTime() - call.startedAt.getTime()) / 1000));
+      } else {
+        calculatedDuration = call.durationSeconds || 0;
+      }
+    }
+
+    const updated = await prisma.call.update({
+      where: { id: call.id },
+      data: {
+        status: CallStatus.ENDED,
+        endedAt: now,
+        durationSeconds: calculatedDuration,
+        disconnectionReason: call.disconnectionReason || 'user_hangup',
+      },
+      include: {
+        agent: {
+          select: { id: true, name: true, voiceId: true, language: true },
+        },
+      },
+    });
+
+    return this.enrichCall(updated, true);
+  }
+
+  /**
    * Aggregate dashboard KPIs (total, completed, failed, ongoing, average duration, success rate, active agents)
    * and recent calls calculated from persisted database records with strict user isolation and filters.
    */
@@ -379,6 +477,26 @@ export class CallService {
     }
 
     const hasStatusFilter = status && status !== 'ALL';
+
+    // Reconcile active Retell calls for accurate KPI telemetry
+    try {
+      const activeCalls = await prisma.call.findMany({
+        where: {
+          userId,
+          status: { in: [CallStatus.ONGOING, CallStatus.INITIATED] },
+          NOT: { providerCallId: { startsWith: 'call_mock_' } },
+        },
+        select: { id: true },
+        take: 10,
+      });
+      if (activeCalls.length > 0) {
+        await Promise.allSettled(
+          activeCalls.map((c) => this.syncCallDetails(userId, c.id))
+        );
+      }
+    } catch {
+      // Non-blocking telemetry sync error
+    }
 
     const [
       totalCalls,
@@ -600,6 +718,28 @@ export class CallService {
   }
 
   /**
+   * Permanently delete a call record with tenant isolation
+   */
+  async deleteCall(userId: string, callId: string): Promise<{ success: boolean; message: string }> {
+    const call = await prisma.call.findFirst({
+      where: { id: callId, userId },
+    });
+
+    if (!call) {
+      throw new AppError('Call record not found or access denied', 404, 'CALL_NOT_FOUND');
+    }
+
+    await prisma.call.delete({
+      where: { id: callId },
+    });
+
+    return {
+      success: true,
+      message: 'Call record deleted successfully',
+    };
+  }
+
+  /**
    * Asynchronously synchronize call details, transcript, and recording from Retell AI.
    * Useful when webhooks cannot reach local dev environments or to fetch latest data on demand.
    */
@@ -617,8 +757,27 @@ export class CallService {
       throw new AppError('Call record not found or access denied', 404, 'CALL_NOT_FOUND');
     }
 
-    // If mock call, nothing to query from remote provider
+    // If mock call, check if mock provider has updated state
     if (call.providerCallId.startsWith('call_mock_')) {
+      try {
+        const details = await this.voiceProvider.getCallDetails(call.providerCallId);
+        if (details && details.status === 'ended' && call.status !== CallStatus.ENDED) {
+          const updated = await prisma.call.update({
+            where: { id: call.id },
+            data: {
+              status: CallStatus.ENDED,
+              endedAt: details.endedAt ? new Date(details.endedAt) : new Date(),
+              disconnectionReason: details.disconnectionReason || 'user_hangup',
+            },
+            include: {
+              agent: {
+                select: { id: true, name: true, voiceId: true, language: true },
+              },
+            },
+          });
+          return this.enrichCall(updated, true);
+        }
+      } catch {}
       return this.enrichCall(call, true);
     }
 
@@ -635,6 +794,11 @@ export class CallService {
         } else if (details.status === 'failed') {
           updateData.status = CallStatus.FAILED;
         }
+      }
+
+      if (details.disconnectionReason && call.status !== CallStatus.FAILED) {
+        updateData.disconnectionReason = details.disconnectionReason;
+        updateData.status = CallStatus.ENDED;
       }
 
       if (details.durationSeconds !== undefined && details.durationSeconds > 0) {

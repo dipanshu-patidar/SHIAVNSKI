@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   PhoneCall,
+  PhoneOff,
   Search,
   RefreshCw,
   AlertCircle,
@@ -15,6 +16,7 @@ import {
   Mic,
   Volume2,
   VolumeX,
+  Trash2,
 } from 'lucide-react';
 import { callApi, Call, CallStatus } from '../api/call.api';
 import { agentApi, Agent } from '../api/agent.api';
@@ -44,6 +46,57 @@ export const CallsPage: React.FC = () => {
 
   // Browser Voice Conversation Modal State
   const [webCallModalOpen, setWebCallModalOpen] = useState<boolean>(false);
+
+  // Deleting & Ending Call State
+  const [deletingCallId, setDeletingCallId] = useState<string | null>(null);
+  const [endingCallId, setEndingCallId] = useState<string | null>(null);
+
+  const handleEndCall = async (e: React.MouseEvent, callId: string) => {
+    e.stopPropagation();
+    try {
+      setEndingCallId(callId);
+      if (typeof callApi?.endCall === 'function') {
+        const ended = await callApi.endCall(callId);
+        setCalls((prev) => prev.map((c) => (c.id === callId ? ended : c)));
+        toast.success('Call ended successfully', 'Call Terminated');
+      }
+      setTimeout(async () => {
+        try {
+          if (typeof callApi?.syncCall === 'function') {
+            const synced = await callApi.syncCall(callId);
+            if (synced) {
+              setCalls((prev) => prev.map((c) => (c.id === callId ? synced : c)));
+            }
+          }
+        } catch {}
+      }, 2000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to end call';
+      toast.error(msg, 'End Call Failed');
+    } finally {
+      setEndingCallId(null);
+    }
+  };
+
+  const handleDeleteCall = async (e: React.MouseEvent, callId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this call record?')) {
+      return;
+    }
+
+    try {
+      setDeletingCallId(callId);
+      await callApi.deleteCall(callId);
+      setCalls((prev) => prev.filter((c) => c.id !== callId));
+      setTotal((prev) => Math.max(0, prev - 1));
+      toast.success('Call record deleted successfully', 'Record Deleted');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete call record';
+      toast.error(msg, 'Delete Failed');
+    } finally {
+      setDeletingCallId(null);
+    }
+  };
 
   // Load user's agents for dropdown filter and browser call selection
   useEffect(() => {
@@ -99,6 +152,20 @@ export const CallsPage: React.FC = () => {
   useEffect(() => {
     fetchCalls();
   }, [fetchCalls]);
+
+  // Auto-refresh when calls list contains ongoing or initiated sessions
+  useEffect(() => {
+    const hasActiveCalls = calls.some(
+      (c) => c.status === 'ONGOING' || c.status === 'INITIATED'
+    );
+    if (!hasActiveCalls) return;
+
+    const interval = setInterval(() => {
+      fetchCalls();
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [calls, fetchCalls]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -451,14 +518,38 @@ export const CallsPage: React.FC = () => {
 
                       {/* Action */}
                       <td className="px-5 py-4 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => setSelectedCall(call)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-400 hover:text-white hover:bg-blue-600/20 border border-blue-500/20 transition-all"
-                          title="View Call Details"
-                          aria-label={`View details for call ${call.id}`}
-                        >
-                          <Eye className="w-3.5 h-3.5" /> Details
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          {(call.status === 'ONGOING' || call.status === 'INITIATED') && (
+                            <button
+                              onClick={(e) => handleEndCall(e, call.id)}
+                              disabled={endingCallId === call.id}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-rose-300 hover:text-white bg-rose-500/10 hover:bg-rose-600/30 border border-rose-500/30 transition-all disabled:opacity-50"
+                              title="End Call Now"
+                              aria-label={`End call ${call.id}`}
+                            >
+                              <PhoneOff className={`w-3.5 h-3.5 ${endingCallId === call.id ? 'animate-spin' : ''}`} />
+                              <span>End</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setSelectedCall(call)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-400 hover:text-white hover:bg-blue-600/20 border border-blue-500/20 transition-all"
+                            title="View Call Details"
+                            aria-label={`View details for call ${call.id}`}
+                          >
+                            <Eye className="w-3.5 h-3.5" /> Details
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteCall(e, call.id)}
+                            disabled={deletingCallId === call.id}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-white hover:bg-rose-600/20 border border-rose-500/20 transition-all disabled:opacity-50"
+                            title="Delete Call Record"
+                            aria-label={`Delete call record ${call.id}`}
+                          >
+                            <Trash2 className={`w-3.5 h-3.5 ${deletingCallId === call.id ? 'animate-spin' : ''}`} />
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

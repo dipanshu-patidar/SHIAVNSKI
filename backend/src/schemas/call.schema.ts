@@ -68,8 +68,13 @@ export const createWebCallSchema = z.object({
     .optional(),
 });
 
+export const endCallSchema = z.object({
+  durationSeconds: z.number().int().nonnegative().optional(),
+});
+
 export type CreateCallInput = z.infer<typeof createCallSchema>;
 export type CreateWebCallInput = z.infer<typeof createWebCallSchema>;
+export type EndCallInput = z.infer<typeof endCallSchema>;
 export type ListCallsQuery = z.infer<typeof listCallsQuerySchema>;
 export type DashboardMetricsQuery = z.infer<typeof dashboardMetricsQuerySchema>;
 

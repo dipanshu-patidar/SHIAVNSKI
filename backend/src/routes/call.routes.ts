@@ -13,7 +13,9 @@ callRouter.get('/', (req, res, next) => callController.list(req, res, next));
 callRouter.get('/stats', (req, res, next) => callController.getDashboardMetrics(req, res, next));
 callRouter.get('/:id', (req, res, next) => callController.getById(req, res, next));
 callRouter.delete('/:id/recording', (req, res, next) => callController.deleteRecording(req, res, next));
+callRouter.delete('/:id', (req, res, next) => callController.delete(req, res, next));
 callRouter.post('/:id/sync', (req, res, next) => callController.syncCall(req, res, next));
+callRouter.post('/:id/end', (req, res, next) => callController.endCall(req, res, next));
 callRouter.post('/:id/simulate-step', (req, res, next) => callController.simulateStep(req, res, next));
 
 export default callRouter;

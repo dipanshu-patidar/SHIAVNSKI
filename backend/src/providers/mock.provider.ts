@@ -219,6 +219,15 @@ export class MockVoiceProvider implements IVoiceProvider {
     };
   }
 
+  async endCall(providerCallId: string): Promise<void> {
+    const existing = this.mockCalls.get(providerCallId);
+    if (existing) {
+      existing.status = 'ended';
+      existing.endedAt = new Date().toISOString();
+      existing.disconnectionReason = 'user_hangup';
+    }
+  }
+
   async getCallDetails(providerCallId: string): Promise<ProviderCallDetails> {
     const existing = this.mockCalls.get(providerCallId);
     if (existing) {

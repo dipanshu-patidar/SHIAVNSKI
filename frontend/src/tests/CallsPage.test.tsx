@@ -54,6 +54,9 @@ vi.mock('../api/call.api', () => ({
     listCalls: vi.fn(),
     getCall: vi.fn(),
     initiateCall: vi.fn(),
+    deleteCall: vi.fn(),
+    syncCall: vi.fn().mockResolvedValue(null),
+    endCall: vi.fn().mockResolvedValue(null),
   },
 }));
 
@@ -153,5 +156,31 @@ describe('Call History Page (CallsPage)', () => {
     expect(dialog).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Call Record Details' })).toBeInTheDocument();
     expect(within(dialog).getByText('call_mock_1001_abc')).toBeInTheDocument();
+  });
+
+  it('deletes a call record when clicking the Delete button', async () => {
+    vi.mocked(callApi.deleteCall).mockResolvedValue(undefined as any);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <ToastProvider>
+        <BrowserRouter>
+          <CallsPage />
+        </BrowserRouter>
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('+1 (415) ***-2671')).toBeInTheDocument();
+    });
+
+    const deleteBtns = screen.getAllByRole('button', { name: /Delete call record/i });
+    expect(deleteBtns.length).toBeGreaterThan(0);
+    fireEvent.click(deleteBtns[0]);
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(callApi.deleteCall).toHaveBeenCalledWith('call_1');
+
+    confirmSpy.mockRestore();
   });
 });
