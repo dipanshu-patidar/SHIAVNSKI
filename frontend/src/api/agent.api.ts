@@ -26,6 +26,7 @@ export interface CreateAgentDTO {
   responsiveness?: number;
   interruptionSensitivity?: number;
   isActive?: boolean;
+  providerAgentId?: string | null;
 }
 
 export interface UpdateAgentDTO {
@@ -37,6 +38,7 @@ export interface UpdateAgentDTO {
   responsiveness?: number;
   interruptionSensitivity?: number;
   isActive?: boolean;
+  providerAgentId?: string | null;
 }
 
 export interface AgentListResponse {
@@ -66,6 +68,13 @@ export const agentApi = {
 
   async updateAgent(id: string, data: UpdateAgentDTO): Promise<Agent> {
     const res = await apiClient.put<{ success: boolean; data: { agent: Agent } }>(`/agents/${id}`, data);
+    return res.data.data.agent;
+  },
+
+  async syncRetellAgent(providerAgentId?: string): Promise<Agent> {
+    const res = await apiClient.post<{ success: boolean; data: { agent: Agent } }>('/agents/sync', {
+      providerAgentId,
+    });
     return res.data.data.agent;
   },
 

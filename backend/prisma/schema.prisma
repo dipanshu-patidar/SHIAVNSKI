@@ -78,6 +78,8 @@ model Call {
   userId                   String     @map("user_id")
   agentId                  String     @map("agent_id")
   providerCallId           String     @unique @map("provider_call_id")
+  callType                 String     @default("phone_call") @map("call_type")
+  recordingStatus          String?    @default("available") @map("recording_status")
   fromNumber               String     @map("from_number")
   toNumber                 String     @map("to_number")
   status                   CallStatus @default(INITIATED)

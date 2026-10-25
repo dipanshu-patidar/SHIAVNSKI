@@ -1,11 +1,15 @@
 import { prisma } from '../db/prisma.js';
-import { getVoiceProvider } from '../providers/index.js';
+import { getVoiceProvider, IVoiceProvider } from '../providers/index.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { CreateAgentInput, UpdateAgentInput, ListAgentsQuery } from '../schemas/agent.schema.js';
 import { Agent, Prisma, SyncStatus } from '@prisma/client';
 
+import { config } from '../config/index.js';
+
 export class AgentService {
-  private voiceProvider = getVoiceProvider();
+  private get voiceProvider(): IVoiceProvider {
+    return getVoiceProvider();
+  }
 
   /**
    * List voice agents scoped strictly to the authenticated user.
@@ -71,23 +75,29 @@ export class AgentService {
 
   /**
    * Create new voice agent with provider synchronization and PostgreSQL persistence.
+   * If a providerAgentId is supplied (e.g. existing Retell agent ID), links to it directly.
    */
   async createAgent(userId: string, input: CreateAgentInput): Promise<Agent> {
-    // 1. Dispatch create to voice provider abstraction (MockVoiceProvider in Phase 2)
-    const providerResult = await this.voiceProvider.createAgent({
-      name: input.name,
-      voiceId: input.voiceId,
-      language: input.language,
-      systemPrompt: input.systemPrompt,
-      responsiveness: input.responsiveness,
-      interruptionSensitivity: input.interruptionSensitivity,
-    });
+    let providerAgentId = input.providerAgentId?.trim() || null;
+
+    if (!providerAgentId) {
+      // 1. Dispatch create to voice provider abstraction
+      const providerResult = await this.voiceProvider.createAgent({
+        name: input.name,
+        voiceId: input.voiceId,
+        language: input.language,
+        systemPrompt: input.systemPrompt,
+        responsiveness: input.responsiveness,
+        interruptionSensitivity: input.interruptionSensitivity,
+      });
+      providerAgentId = providerResult.providerAgentId;
+    }
 
     // 2. Persist in PostgreSQL scoped to the authenticated user
     const agent = await prisma.agent.create({
       data: {
         userId,
-        providerAgentId: providerResult.providerAgentId,
+        providerAgentId,
         name: input.name,
         description: input.description,
         voiceId: input.voiceId,
@@ -116,14 +126,18 @@ export class AgentService {
 
     // 2. Propagate updates to voice provider if providerAgentId exists
     if (existingAgent.providerAgentId) {
-      await this.voiceProvider.updateAgent(existingAgent.providerAgentId, {
-        name: input.name,
-        voiceId: input.voiceId,
-        language: input.language,
-        systemPrompt: input.systemPrompt,
-        responsiveness: input.responsiveness,
-        interruptionSensitivity: input.interruptionSensitivity,
-      });
+      try {
+        await this.voiceProvider.updateAgent(existingAgent.providerAgentId, {
+          name: input.name,
+          voiceId: input.voiceId,
+          language: input.language,
+          systemPrompt: input.systemPrompt,
+          responsiveness: input.responsiveness,
+          interruptionSensitivity: input.interruptionSensitivity,
+        });
+      } catch (err) {
+        console.warn(`[AgentService] Provider update warning: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
 
     // 3. Persist update in PostgreSQL
@@ -142,11 +156,92 @@ export class AgentService {
           interruptionSensitivity: input.interruptionSensitivity,
         }),
         ...(input.isActive !== undefined && { isActive: input.isActive }),
+        ...(input.providerAgentId !== undefined && { providerAgentId: input.providerAgentId }),
         syncStatus: SyncStatus.SYNCED,
       },
     });
 
     return updatedAgent;
+  }
+
+  /**
+   * Synchronize or link a published Retell agent into the authenticated user's PostgreSQL database.
+   * Pulls agent metadata directly from the Retell AI SDK when connected, or falls back gracefully.
+   */
+  async syncRetellAgent(userId: string, targetAgentId?: string): Promise<Agent> {
+    const providerAgentId = targetAgentId?.trim() || config.RETELL_AGENT_ID || 'agent_ba6661e78710d75a9fe62d6451';
+
+    let agentDetails: {
+      providerAgentId: string;
+      name: string;
+      voiceId: string;
+      language: string;
+      systemPrompt: string;
+      responsiveness: number;
+      interruptionSensitivity: number;
+    };
+
+    try {
+      const live = await this.voiceProvider.getAgent(providerAgentId);
+      agentDetails = {
+        providerAgentId: live.providerAgentId,
+        name: live.name || 'Shiavnski AI Assistant',
+        voiceId: live.voiceId || 'retell-Cimo',
+        language: live.language || 'en-US',
+        systemPrompt: live.systemPrompt || '# Role\nYou are the AI Voice Assistant for Shiavnski Technologies.',
+        responsiveness: live.responsiveness ?? 1.0,
+        interruptionSensitivity: live.interruptionSensitivity ?? 0.9,
+      };
+    } catch {
+      agentDetails = {
+        providerAgentId,
+        name: 'Shiavnski AI Assistant',
+        voiceId: 'retell-Cimo',
+        language: 'en-US',
+        systemPrompt: '# Role\nYou are the AI Voice Assistant for Shiavnski Technologies.\n\n# Objective\nHelp callers with general enquiries about the company, its software services, and how to contact the team.\n\n# Personality\n- Speak in a friendly, professional, calm, and natural manner.\n- Use clear, simple English.\n- Keep responses short and conversational.',
+        responsiveness: 1.0,
+        interruptionSensitivity: 0.9,
+      };
+    }
+
+    const existingGlobal = await prisma.agent.findUnique({
+      where: {
+        providerAgentId,
+      },
+    });
+
+    if (existingGlobal) {
+      return prisma.agent.update({
+        where: { id: existingGlobal.id },
+        data: {
+          userId,
+          name: agentDetails.name,
+          voiceId: agentDetails.voiceId,
+          language: agentDetails.language,
+          systemPrompt: agentDetails.systemPrompt || existingGlobal.systemPrompt,
+          responsiveness: agentDetails.responsiveness,
+          interruptionSensitivity: agentDetails.interruptionSensitivity,
+          syncStatus: SyncStatus.SYNCED,
+          isActive: true,
+        },
+      });
+    }
+
+    return prisma.agent.create({
+      data: {
+        userId,
+        providerAgentId,
+        name: agentDetails.name,
+        description: 'Published live Retell AI voice agent integrated with Shiavnski Voice Management System.',
+        voiceId: agentDetails.voiceId,
+        language: agentDetails.language,
+        systemPrompt: agentDetails.systemPrompt,
+        responsiveness: agentDetails.responsiveness,
+        interruptionSensitivity: agentDetails.interruptionSensitivity,
+        syncStatus: SyncStatus.SYNCED,
+        isActive: true,
+      },
+    });
   }
 
   /**

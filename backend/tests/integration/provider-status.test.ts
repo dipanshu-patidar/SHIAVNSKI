@@ -54,6 +54,29 @@ describe('Provider Status & Harmless Connectivity Check API', () => {
   });
 
   it('POST /api/provider/verify executes harmless read-only check when authenticated', async () => {
+    const { providerStatusService } = await import('../../src/services/provider-status.service.js');
+    const spy = vi.spyOn(providerStatusService, 'runConnectivityCheck').mockResolvedValueOnce({
+      mode: 'mock',
+      isLiveModeEnabled: false,
+      configuration: {
+        hasApiKey: true,
+        hasWebhookKey: true,
+        hasCallerNumber: true,
+        hasAgentId: true,
+        configuredFromNumber: '+14155551234',
+        configuredAgentId: 'agent_ba6661e78710d75a9fe62d6451',
+      },
+      readiness: {
+        apiAuthentication: true,
+        callerNumberVerified: true,
+        agentConfigured: true,
+        webhookEndpointReady: true,
+        readyForLiveCalls: true,
+      },
+      missingRequirements: [],
+      recommendations: ['Published Retell Agent verified successfully'],
+    });
+
     const res = await request(app)
       .post('/api/provider/verify')
       .set('Cookie', authCookie);
@@ -64,5 +87,7 @@ describe('Provider Status & Harmless Connectivity Check API', () => {
     expect(res.body.data.mode).toBe('mock');
     expect(res.body.data.readiness).toBeDefined();
     expect(res.body.data.recommendations).toBeInstanceOf(Array);
+
+    spy.mockRestore();
   });
 });

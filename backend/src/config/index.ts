@@ -16,6 +16,7 @@ const envSchema = z.object({
   RETELL_API_KEY: z.string().optional().default(''),
   RETELL_WEBHOOK_KEY: z.string().optional().default(''),
   RETELL_FROM_NUMBER: z.string().optional().default('+14155551234'),
+  RETELL_AGENT_ID: z.string().optional().default('agent_ba6661e78710d75a9fe62d6451'),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
 });
 
@@ -49,6 +50,7 @@ export function getSafeProviderConfig() {
   const hasApiKey = Boolean(config.RETELL_API_KEY && config.RETELL_API_KEY.trim() !== '');
   const hasWebhookKey = Boolean(getRetellWebhookKey() && getRetellWebhookKey().trim() !== '');
   const hasFromNumber = Boolean(config.RETELL_FROM_NUMBER && config.RETELL_FROM_NUMBER.trim() !== '');
+  const hasAgentId = Boolean(config.RETELL_AGENT_ID && config.RETELL_AGENT_ID.trim() !== '');
 
   return {
     providerMode: config.PROVIDER_MODE,
@@ -57,6 +59,8 @@ export function getSafeProviderConfig() {
       hasApiKey,
       hasWebhookKey,
       hasFromNumber,
+      hasAgentId,
+      agentIdConfigured: config.RETELL_AGENT_ID || null,
       fromNumberConfigured: config.RETELL_FROM_NUMBER || null,
       maskedApiKey: hasApiKey ? 'configured (hidden)' : 'not_configured',
       maskedWebhookKey: hasWebhookKey ? 'configured (hidden)' : 'not_configured',

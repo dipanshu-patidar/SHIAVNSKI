@@ -40,6 +40,7 @@ export const createAgentSchema = z.object({
     .max(1.0, 'Interruption sensitivity cannot exceed 1.0')
     .default(0.8),
   isActive: z.boolean().default(true),
+  providerAgentId: z.string().trim().max(100).optional().nullable(),
 });
 
 export const updateAgentSchema = z.object({
@@ -85,6 +86,11 @@ export const updateAgentSchema = z.object({
     .max(1.0, 'Interruption sensitivity cannot exceed 1.0')
     .optional(),
   isActive: z.boolean().optional(),
+  providerAgentId: z.string().trim().max(100).optional().nullable(),
+});
+
+export const syncAgentSchema = z.object({
+  providerAgentId: z.string().trim().max(100).optional(),
 });
 
 export const listAgentsQuerySchema = z.object({

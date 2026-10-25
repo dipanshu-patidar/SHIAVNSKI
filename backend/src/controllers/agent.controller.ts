@@ -124,6 +124,30 @@ export class AgentController {
       next(error);
     }
   }
+
+  /**
+   * POST /api/agents/sync
+   * Synchronize or import a published Retell agent into user account
+   */
+  async syncRetell(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) {
+        throw new AppError('Authentication required', 401, 'UNAUTHORIZED');
+      }
+
+      const providerAgentId = req.body?.providerAgentId as string | undefined;
+      const agent = await agentService.syncRetellAgent(req.user.id, providerAgentId);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          agent,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const agentController = new AgentController();

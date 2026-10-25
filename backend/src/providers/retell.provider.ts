@@ -1,4 +1,6 @@
 import Retell from 'retell-sdk';
+import https from 'node:https';
+import dns from 'node:dns/promises';
 import { config } from '../config/index.js';
 import {
   IVoiceProvider,
@@ -9,7 +11,69 @@ import {
   CreateCallParams,
   ProviderCallResult,
   ProviderCallDetails,
+  CreateWebCallParams,
+  ProviderWebCallResult,
+  DeleteRecordingResult,
 } from './voice-provider.interface.js';
+
+// Resilient DNS resolver to prevent IPv6 NAT64 timeout issues on Windows
+const resolver = new dns.Resolver();
+try {
+  resolver.setServers(['1.1.1.1', '8.8.8.8']);
+} catch {
+  // Ignore fallback failure
+}
+
+const lookup = (hostname: string, options: any, callback: any) => {
+  const cb = typeof options === 'function' ? options : callback;
+  const opts = typeof options === 'object' ? options : {};
+  resolver.resolve4(hostname)
+    .then((addrs) => {
+      if (opts.all) {
+        cb(null, addrs.map((a) => ({ address: a, family: 4 })));
+      } else {
+        cb(null, addrs[0], 4);
+      }
+    })
+    .catch((err) => cb(err));
+};
+
+const httpsAgent = new https.Agent({ lookup, keepAlive: true });
+
+const createResilientFetch = () => {
+  return (url: any, init: any = {}) => {
+    return new Promise<Response>((resolve, reject) => {
+      const parsed = new URL(url.toString());
+      const headers = new Headers(init.headers);
+      const reqHeaders = Object.fromEntries(headers.entries());
+
+      const req = https.request(parsed, {
+        method: init.method || 'GET',
+        headers: reqHeaders,
+        agent: httpsAgent,
+      }, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          const body = Buffer.concat(chunks);
+          const finalBody = (body.length === 0 && (res.statusCode === 204 || res.statusCode === 200))
+            ? Buffer.from('{}')
+            : body;
+          resolve(new Response(finalBody, {
+            status: res.statusCode,
+            statusText: res.statusMessage,
+            headers: res.headers as any,
+          }));
+        });
+      });
+      req.on('error', reject);
+      if (init.body) {
+        req.write(init.body);
+      }
+      req.end();
+    });
+  };
+};
 
 export interface RetellConnectivityCheckResult {
   connected: boolean;
@@ -36,7 +100,10 @@ export class RetellVoiceProvider implements IVoiceProvider {
         'RetellVoiceProvider requires a valid RETELL_API_KEY in environment configuration'
       );
     }
-    this.client = new Retell({ apiKey: key });
+    this.client = new Retell({
+      apiKey: key,
+      fetch: createResilientFetch() as any,
+    });
   }
 
   /**
@@ -208,6 +275,53 @@ export class RetellVoiceProvider implements IVoiceProvider {
   }
 
   /**
+   * Create a browser WebRTC call session via Retell AI.
+   * Returns call_id and access_token used by the Retell Web Client SDK.
+   */
+  async createWebCall(params: CreateWebCallParams): Promise<ProviderWebCallResult> {
+    try {
+      const call = await this.client.call.createWebCall({
+        agent_id: params.providerAgentId,
+        retell_llm_dynamic_variables: params.dynamicVariables,
+        metadata: params.metadata,
+      });
+
+      const transport = ((call as any).transport as 'gateway' | 'livekit') || 'gateway';
+      const iceServers = (call as any).ice_servers || [];
+
+      console.log(
+        `[RetellVoiceProvider] Created WebRTC call session: id=${call.call_id}, transport=${transport}, iceServersCount=${iceServers.length}`
+      );
+
+      return {
+        providerCallId: call.call_id,
+        accessToken: call.access_token,
+        transport,
+        iceServers,
+        isMock: false,
+        metadata: {
+          agentId: (call as any).agent_id,
+          expiresAt: (call as any).expires_at,
+        },
+      };
+    } catch (error: any) {
+      throw new Error(`Retell browser web call creation failed: ${error?.message || 'Provider error'}`);
+    }
+  }
+
+  /**
+   * Delete or remove call recording.
+   * Retell AI does not support isolated deletion of the audio recording without erasing the entire remote call.
+   */
+  async deleteRecording(_providerCallId: string): Promise<DeleteRecordingResult> {
+    return {
+      providerDeleted: false,
+      message:
+        'Retell AI does not provide an isolated recording-deletion API without erasing the entire remote call record. The recording reference has been safely removed from this application.',
+    };
+  }
+
+  /**
    * Retrieve Call details from Retell AI.
    */
   async getCallDetails(providerCallId: string): Promise<ProviderCallDetails> {
@@ -234,6 +348,7 @@ export class RetellVoiceProvider implements IVoiceProvider {
         metadata: {
           callStatus: call.call_status,
           transcript: call.transcript,
+          transcriptObject: (call as any).transcript_object,
           recordingUrl: call.recording_url,
           callAnalysis: (call as any).call_analysis,
         },

@@ -43,9 +43,31 @@ export const AgentsPage: React.FC = () => {
   // Delete confirmation dialog state
   const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null);
   const [deleting, setDeleting] = useState<boolean>(false);
+  const [syncingRetell, setSyncingRetell] = useState<boolean>(false);
 
   const toastRef = React.useRef(toast);
   toastRef.current = toast;
+
+  // Sync Retell agent
+  const handleSyncRetell = async () => {
+    try {
+      setSyncingRetell(true);
+      const synced = await agentApi.syncRetellAgent();
+      setAgents((prev) => {
+        const exists = prev.some((a) => a.id === synced.id);
+        if (exists) {
+          return prev.map((a) => (a.id === synced.id ? synced : a));
+        }
+        return [synced, ...prev];
+      });
+      toast.success(`Retell Agent "${synced.name}" (${synced.providerAgentId}) synced into PostgreSQL.`, 'Retell Synced');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to sync Retell agent';
+      toast.error(msg, 'Sync Error');
+    } finally {
+      setSyncingRetell(false);
+    }
+  };
 
   // Load agents from backend PostgreSQL API
   const fetchAgents = useCallback(async () => {
@@ -158,12 +180,23 @@ export const AgentsPage: React.FC = () => {
             Configure agent personas, TTS voice models, and conversational responsiveness with PostgreSQL persistence.
           </p>
         </div>
-        <button
-          onClick={handleOpenCreateModal}
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 transition-all hover:scale-[1.02] shrink-0"
-        >
-          <Plus className="w-4 h-4" /> Create Agent
-        </button>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            onClick={handleSyncRetell}
+            disabled={syncingRetell}
+            className="inline-flex items-center gap-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-all hover:scale-[1.02] disabled:opacity-50"
+            title="Sync published Retell agent into PostgreSQL database"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncingRetell ? 'animate-spin' : ''}`} />
+            {syncingRetell ? 'Syncing...' : 'Sync Retell Agent'}
+          </button>
+          <button
+            onClick={handleOpenCreateModal}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 transition-all hover:scale-[1.02]"
+          >
+            <Plus className="w-4 h-4" /> Create Agent
+          </button>
+        </div>
       </div>
 
       {/* Search and Filters Toolbar */}
@@ -328,7 +361,13 @@ export const AgentsPage: React.FC = () => {
 
                   {/* Provider Mode Banner */}
                   <div className="mb-3">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wide ${
+                        isMock
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
                       <Radio className="w-2.5 h-2.5" />
                       {isMock ? 'MOCK / SIMULATED' : 'RETELL LIVE'}
                     </span>

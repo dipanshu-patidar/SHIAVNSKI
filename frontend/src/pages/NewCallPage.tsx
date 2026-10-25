@@ -13,11 +13,13 @@ import {
   Sliders,
   Volume2,
   Globe,
+  Mic,
 } from 'lucide-react';
 import { agentApi, Agent } from '../api/agent.api';
 import { callApi } from '../api/call.api';
 import { useToast } from '../context/ToastContext';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { WebVoiceCallModal } from '../components/calls/WebVoiceCallModal';
 
 interface VariableEntry {
   id: string;
@@ -42,6 +44,7 @@ export const NewCallPage: React.FC = () => {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [webCallModalOpen, setWebCallModalOpen] = useState<boolean>(false);
 
   // Load user's agents
   useEffect(() => {
@@ -217,6 +220,31 @@ export const NewCallPage: React.FC = () => {
                 Calls are processed by the local <strong>MockVoiceProvider</strong>. Synthetic call identifiers (<code className="text-amber-200">call_mock_*</code>) will be generated and persisted in PostgreSQL without consuming Retell cloud API credits.
               </p>
             </div>
+          </div>
+
+          {/* Prominent Real Browser Voice Call Section */}
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-400 flex items-center justify-center shrink-0">
+                <Mic className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Browser Voice Conversation</h3>
+                <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                  Converse directly with <strong>{selectedAgent?.name || 'your agent'}</strong> using your browser microphone and speakers via real-time WebRTC. No phone number or carrier charges required.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              id="start-browser-voice-btn"
+              onClick={() => setWebCallModalOpen(true)}
+              disabled={loadingAgents || agents.length === 0}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02] shrink-0"
+            >
+              <Mic className="w-4 h-4" /> Start Voice Conversation
+            </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -481,6 +509,16 @@ export const NewCallPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Browser Web Voice Conversation Modal */}
+      <WebVoiceCallModal
+        isOpen={webCallModalOpen}
+        agent={selectedAgent || null}
+        onClose={() => setWebCallModalOpen(false)}
+        onCallCompleted={() => {
+          navigate('/calls');
+        }}
+      />
     </div>
   );
 };

@@ -7,6 +7,9 @@ import {
   CreateCallParams,
   ProviderCallResult,
   ProviderCallDetails,
+  CreateWebCallParams,
+  ProviderWebCallResult,
+  DeleteRecordingResult,
 } from './voice-provider.interface.js';
 
 export class MockVoiceProvider implements IVoiceProvider {
@@ -56,6 +59,27 @@ export class MockVoiceProvider implements IVoiceProvider {
     const existing = this.mockAgents.get(providerAgentId);
     if (existing) {
       return existing;
+    }
+
+    // Support published Retell Agent ID in mock simulation mode
+    if (
+      providerAgentId === 'agent_ba6661e78710d75a9fe62d6451' ||
+      providerAgentId.startsWith('agent_ba666')
+    ) {
+      return {
+        providerAgentId,
+        name: 'Shiavnski AI Assistant',
+        voiceId: 'retell-Cimo',
+        language: 'en-US',
+        systemPrompt:
+          '# Role\nYou are the AI Voice Assistant for Shiavnski Technologies.\n\n# Objective\nHelp callers with general enquiries about the company, its software services, and how to contact the team.',
+        responsiveness: 1.0,
+        interruptionSensitivity: 0.9,
+        isMock: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        metadata: { simulated: true, agentSource: 'retell_published_agent' },
+      };
     }
 
     // Return synthesized details for any agent_mock_* id
@@ -147,6 +171,51 @@ export class MockVoiceProvider implements IVoiceProvider {
       status: callDetails.status,
       isMock: true,
       metadata: callDetails.metadata,
+    };
+  }
+
+  async createWebCall(params: CreateWebCallParams): Promise<ProviderWebCallResult> {
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const providerCallId = `call_mock_web_${timestamp}_${randomSuffix}`;
+    const accessToken = `mock_access_token_${timestamp}_${randomSuffix}`;
+
+    const callDetails: ProviderCallDetails = {
+      providerCallId,
+      fromNumber: 'Browser Client',
+      toNumber: 'Shiavnski AI Assistant',
+      status: 'initiated',
+      isMock: true,
+      startedAt: new Date().toISOString(),
+      metadata: {
+        simulated: true,
+        simulationEngine: 'MockVoiceProvider-WebCall-v1',
+        providerAgentId: params.providerAgentId,
+        dynamicVariablesCount: params.dynamicVariables ? Object.keys(params.dynamicVariables).length : 0,
+        ...params.metadata,
+      },
+    };
+
+    this.mockCalls.set(providerCallId, callDetails);
+
+    return {
+      providerCallId,
+      accessToken,
+      transport: 'gateway',
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      isMock: true,
+      metadata: callDetails.metadata,
+    };
+  }
+
+  async deleteRecording(providerCallId: string): Promise<DeleteRecordingResult> {
+    const existing = this.mockCalls.get(providerCallId);
+    if (existing && existing.metadata) {
+      delete existing.metadata.recordingUrl;
+    }
+    return {
+      providerDeleted: true,
+      message: 'Simulated recording reference deleted [MOCK]',
     };
   }
 

@@ -75,6 +75,7 @@ PROVIDER_MODE="mock"
 
 # Retell AI Credentials (REQUIRED ONLY when PROVIDER_MODE="retell")
 RETELL_API_KEY="your_retell_api_key_here"
+RETELL_AGENT_ID="agent_ba6661e78710d75a9fe62d6451"
 RETELL_WEBHOOK_KEY=""
 RETELL_FROM_NUMBER="+14155551234"
 ```

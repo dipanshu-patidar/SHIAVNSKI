@@ -1,8 +1,8 @@
 import { prisma } from '../db/prisma.js';
-import { getVoiceProvider } from '../providers/index.js';
+import { getVoiceProvider, IVoiceProvider } from '../providers/index.js';
 import { config } from '../config/index.js';
 import { AppError } from '../middleware/error.middleware.js';
-import { CreateCallInput, ListCallsQuery } from '../schemas/call.schema.js';
+import { CreateCallInput, CreateWebCallInput, ListCallsQuery } from '../schemas/call.schema.js';
 import { maskPhoneNumber } from '../utils/phone.util.js';
 import { Call, CallStatus, Prisma } from '@prisma/client';
 
@@ -45,7 +45,9 @@ interface CachedIdempotency {
 const idempotencyStore = new Map<string, CachedIdempotency>();
 
 export class CallService {
-  private voiceProvider = getVoiceProvider();
+  private get voiceProvider(): IVoiceProvider {
+    return getVoiceProvider();
+  }
 
   /**
    * Dispatch an outbound phone call with multi-tenant agent ownership verification,
@@ -113,7 +115,7 @@ export class CallService {
       providerResult = await this.voiceProvider.createPhoneCall({
         fromNumber,
         toNumber: input.toNumber,
-        providerAgentId: agent.providerAgentId || 'agent_mock_default',
+        providerAgentId: agent.providerAgentId || config.RETELL_AGENT_ID || 'agent_mock_default',
         dynamicVariables: input.dynamicVariables,
         metadata: {
           userId,
@@ -446,6 +448,256 @@ export class CallService {
     };
   }
 
+  /**
+   * Create a browser-based real-time voice call session via Retell WebRTC.
+   * Connects the browser microphone/speaker directly to the published Retell agent.
+   * Persists the web call record in PostgreSQL with callType = 'web_call'.
+   */
+  async createWebCall(
+    userId: string,
+    input: CreateWebCallInput
+  ): Promise<{
+    call: EnrichedCall;
+    accessToken: string;
+    providerCallId: string;
+    transport: 'gateway' | 'livekit';
+    iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }>;
+  }> {
+    // 1. Verify agent ownership and tenant isolation
+    const agent = await prisma.agent.findFirst({
+      where: {
+        id: input.agentId,
+        userId,
+      },
+    });
+
+    if (!agent) {
+      throw new AppError('Voice agent not found or access denied', 404, 'AGENT_NOT_FOUND');
+    }
+
+    if (!agent.isActive) {
+      throw new AppError(
+        'Cannot start browser voice session with an inactive agent. Please activate the agent first.',
+        400,
+        'AGENT_INACTIVE'
+      );
+    }
+
+    // 2. Dispatch browser web call session via voice provider
+    const isMockAgentId = agent.providerAgentId?.startsWith('agent_mock_');
+    const providerAgentId =
+      (config.PROVIDER_MODE === 'retell' && isMockAgentId)
+        ? (config.RETELL_AGENT_ID || 'agent_ba6661e78710d75a9fe62d6451')
+        : (agent.providerAgentId || config.RETELL_AGENT_ID || 'agent_ba6661e78710d75a9fe62d6451');
+    let providerResult;
+    try {
+      providerResult = await this.voiceProvider.createWebCall({
+        providerAgentId,
+        dynamicVariables: input.dynamicVariables,
+        metadata: {
+          userId,
+          agentId: agent.id,
+          callType: 'web_call',
+        },
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown browser call creation error';
+      throw new AppError(
+        `Failed to create browser voice call session: ${msg}`,
+        502,
+        'PROVIDER_DISPATCH_FAILED',
+        { error: msg }
+      );
+    }
+
+    if (!providerResult || !providerResult.providerCallId) {
+      throw new AppError(
+        'Voice provider returned an invalid session response without a call identifier',
+        502,
+        'PROVIDER_MALFORMED_RESPONSE'
+      );
+    }
+
+    // 3. Persist the browser Call in PostgreSQL
+    const createdCall = await prisma.call.create({
+      data: {
+        userId,
+        agentId: agent.id,
+        providerCallId: providerResult.providerCallId,
+        callType: 'web_call',
+        fromNumber: 'Browser Client',
+        toNumber: agent.name,
+        status: CallStatus.INITIATED,
+        durationSeconds: 0,
+        dynamicVariables: input.dynamicVariables
+          ? (input.dynamicVariables as Prisma.InputJsonValue)
+          : undefined,
+        startedAt: new Date(),
+      },
+      include: {
+        agent: {
+          select: { id: true, name: true, voiceId: true, language: true },
+        },
+      },
+    });
+
+    return {
+      call: this.enrichCall(createdCall),
+      accessToken: providerResult.accessToken,
+      providerCallId: providerResult.providerCallId,
+      transport: providerResult.transport || 'gateway',
+      iceServers: providerResult.iceServers,
+    };
+  }
+
+  /**
+   * Delete or remove a call recording with strict tenant isolation and error handling.
+   * Removes recordingUrl and recordingMultiChannelUrl references from PostgreSQL,
+   * completely preserving the call history, transcript, duration, sentiment, and metadata.
+   */
+  async deleteCallRecording(
+    userId: string,
+    callId: string
+  ): Promise<{ call: EnrichedCall; providerDeleted: boolean; message: string }> {
+    // 1. Strict tenant verification: confirm call belongs to authenticated user
+    const call = await prisma.call.findFirst({
+      where: { id: callId, userId },
+      include: {
+        agent: {
+          select: { id: true, name: true, voiceId: true, language: true },
+        },
+      },
+    });
+
+    if (!call) {
+      throw new AppError('Call record not found or access denied', 404, 'CALL_NOT_FOUND');
+    }
+
+    // 2. Delegate to provider deletion (checks if provider supports isolated recording erasure)
+    const providerRes = await this.voiceProvider.deleteRecording(call.providerCallId);
+
+    // 3. Update PostgreSQL: remove recording references from app database
+    // Call metadata, transcript, timestamps, and duration are strictly preserved!
+    const updatedCall = await prisma.call.update({
+      where: { id: call.id },
+      data: {
+        recordingUrl: null,
+        recordingMultiChannelUrl: null,
+        recordingStatus: 'removed',
+      },
+      include: {
+        agent: {
+          select: { id: true, name: true, voiceId: true, language: true },
+        },
+      },
+    });
+
+    return {
+      call: this.enrichCall(updatedCall, true),
+      providerDeleted: providerRes.providerDeleted,
+      message: providerRes.message,
+    };
+  }
+
+  /**
+   * Asynchronously synchronize call details, transcript, and recording from Retell AI.
+   * Useful when webhooks cannot reach local dev environments or to fetch latest data on demand.
+   */
+  async syncCallDetails(userId: string, callId: string): Promise<EnrichedCall> {
+    const call = await prisma.call.findFirst({
+      where: { id: callId, userId },
+      include: {
+        agent: {
+          select: { id: true, name: true, voiceId: true, language: true },
+        },
+      },
+    });
+
+    if (!call) {
+      throw new AppError('Call record not found or access denied', 404, 'CALL_NOT_FOUND');
+    }
+
+    // If mock call, nothing to query from remote provider
+    if (call.providerCallId.startsWith('call_mock_')) {
+      return this.enrichCall(call, true);
+    }
+
+    try {
+      const details = await this.voiceProvider.getCallDetails(call.providerCallId);
+
+      const updateData: Prisma.CallUpdateInput = {};
+
+      if (details.status) {
+        if (details.status === 'ongoing' && call.status === 'INITIATED') {
+          updateData.status = CallStatus.ONGOING;
+        } else if (details.status === 'ended') {
+          updateData.status = CallStatus.ENDED;
+        } else if (details.status === 'failed') {
+          updateData.status = CallStatus.FAILED;
+        }
+      }
+
+      if (details.durationSeconds !== undefined && details.durationSeconds > 0) {
+        updateData.durationSeconds = details.durationSeconds;
+      }
+
+      if (details.disconnectionReason) {
+        updateData.disconnectionReason = details.disconnectionReason;
+      }
+
+      if (details.startedAt) {
+        updateData.startedAt = new Date(details.startedAt);
+      }
+
+      if (details.endedAt) {
+        updateData.endedAt = new Date(details.endedAt);
+      }
+
+      const meta = details.metadata as Record<string, any> | undefined;
+      if (meta) {
+        if (meta.transcript) {
+          updateData.transcriptText = meta.transcript;
+        }
+        if (meta.transcriptObject) {
+          updateData.transcriptObject = meta.transcriptObject;
+        }
+        // Only restore recordingUrl if user hasn't explicitly removed it
+        if (meta.recordingUrl && call.recordingStatus !== 'removed') {
+          updateData.recordingUrl = meta.recordingUrl;
+        }
+        if (meta.callAnalysis) {
+          if (meta.callAnalysis.call_summary) {
+            updateData.summary = meta.callAnalysis.call_summary;
+          }
+          if (meta.callAnalysis.user_sentiment) {
+            updateData.sentiment = meta.callAnalysis.user_sentiment;
+          }
+          if (meta.callAnalysis.call_successful !== undefined) {
+            updateData.callSuccessful = meta.callAnalysis.call_successful;
+          }
+          if (meta.callAnalysis.custom_analysis_data) {
+            updateData.customAnalysis = meta.callAnalysis.custom_analysis_data;
+          }
+        }
+      }
+
+      const updated = await prisma.call.update({
+        where: { id: call.id },
+        data: updateData,
+        include: {
+          agent: {
+            select: { id: true, name: true, voiceId: true, language: true },
+          },
+        },
+      });
+
+      return this.enrichCall(updated, true);
+    } catch {
+      // If retrieval fails (e.g. call not yet registered or network issue), return current call
+      return this.enrichCall(call, true);
+    }
+  }
+
   private enrichCall(
     call: Call & {
       agent?: {
@@ -457,8 +709,9 @@ export class CallService {
     },
     maskFullNumber = false
   ): EnrichedCall {
-    const maskedTo = maskPhoneNumber(call.toNumber);
-    const maskedFrom = maskPhoneNumber(call.fromNumber);
+    const isWebCall = call.callType === 'web_call';
+    const maskedTo = isWebCall ? call.toNumber : maskPhoneNumber(call.toNumber);
+    const maskedFrom = isWebCall ? call.fromNumber : maskPhoneNumber(call.fromNumber);
 
     return {
       ...call,
@@ -472,3 +725,4 @@ export class CallService {
 }
 
 export const callService = new CallService();
+

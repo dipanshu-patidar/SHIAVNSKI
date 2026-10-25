@@ -16,6 +16,7 @@ const VOICE_OPTIONS = [
   { id: '11labs-Sarah', label: 'Sarah (ElevenLabs)', desc: 'Natural conversational assistant' },
   { id: '11labs-Michael', label: 'Michael (ElevenLabs)', desc: 'Authoritative, executive presenter' },
   { id: '11labs-Emma', label: 'Emma (ElevenLabs)', desc: 'Crisp, upbeat & high-energy' },
+  { id: 'retell-Cimo', label: 'Cimo (Retell Voice)', desc: 'Natural voice used by published Retell agent' },
   { id: 'retell-neural-eva', label: 'Eva (Retell Neural)', desc: 'Low-latency conversational agent' },
 ];
 
@@ -46,6 +47,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
     responsiveness: 1.0,
     interruptionSensitivity: 0.8,
     isActive: true,
+    providerAgentId: '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -62,6 +64,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
         responsiveness: agent.responsiveness ?? 1.0,
         interruptionSensitivity: agent.interruptionSensitivity ?? 0.8,
         isActive: agent.isActive ?? true,
+        providerAgentId: agent.providerAgentId || '',
       });
     } else {
       setFormData({
@@ -74,6 +77,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
         responsiveness: 1.0,
         interruptionSensitivity: 0.8,
         isActive: true,
+        providerAgentId: '',
       });
     }
     setErrors({});
@@ -127,6 +131,7 @@ export const AgentModal: React.FC<AgentModalProps> = ({
       responsiveness: Number(formData.responsiveness),
       interruptionSensitivity: Number(formData.interruptionSensitivity),
       isActive: formData.isActive,
+      providerAgentId: formData.providerAgentId.trim() || null,
     });
   };
 
@@ -233,6 +238,24 @@ export const AgentModal: React.FC<AgentModalProps> = ({
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
+            />
+          </div>
+
+          {/* Retell Agent ID (Optional) */}
+          <div className="space-y-1.5">
+            <label htmlFor="agent-provider-id" className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+              <span>Retell Agent ID <span className="text-slate-500 font-normal">(Optional — e.g. agent_ba6661e78710d75a9fe62d6451)</span></span>
+              {formData.providerAgentId?.startsWith('agent_ba') && (
+                <span className="text-[10px] text-emerald-400 font-medium">Published Live Agent</span>
+              )}
+            </label>
+            <input
+              id="agent-provider-id"
+              type="text"
+              placeholder="agent_ba6661e78710d75a9fe62d6451 or leave blank to auto-generate"
+              value={formData.providerAgentId}
+              onChange={(e) => setFormData({ ...formData, providerAgentId: e.target.value })}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all"
             />
           </div>
 

@@ -76,6 +76,35 @@ async function main() {
     console.log(`Existing agents found (${existingAgents.length} agents).`);
   }
 
+  // 2b. Seed or sync published Retell Agent ID
+  const retellAgentId = 'agent_ba6661e78710d75a9fe62d6451';
+  const existingRetellAgent = await prisma.agent.findFirst({
+    where: { providerAgentId: retellAgentId },
+  });
+
+  if (!existingRetellAgent) {
+    const liveAgent = await prisma.agent.create({
+      data: {
+        userId,
+        name: 'Shiavnski AI Assistant',
+        description: 'Official Shiavnski Technologies live voice concierge agent configured in Retell AI.',
+        voiceId: 'retell-Cimo',
+        language: 'en-US',
+        systemPrompt: `# Role\nYou are the AI Voice Assistant for Shiavnski Technologies.\n\n# Objective\nHelp callers with general enquiries about the company, its software services, and how to contact the team.\n\n# Personality\n- Speak in a friendly, professional, calm, and natural manner.\n- Use clear, simple English.\n- Keep responses short and conversational.\n- Ask one question at a time.\n- Never interrupt the caller unnecessarily.`,
+        responsiveness: 1.0,
+        interruptionSensitivity: 0.9,
+        syncStatus: SyncStatus.SYNCED,
+        providerAgentId: retellAgentId,
+        isActive: true,
+      },
+    });
+    primaryAgentId = liveAgent.id;
+    console.log(`Seeded live Retell agent in PostgreSQL: "${liveAgent.name}" (${retellAgentId})`);
+  } else {
+    primaryAgentId = existingRetellAgent.id;
+    console.log(`Live Retell agent already exists in PostgreSQL: ${retellAgentId}`);
+  }
+
   // 3. Create Sample Call Records if none exist for this user
   const existingCalls = await prisma.call.count({
     where: { userId },

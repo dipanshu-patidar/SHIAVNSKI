@@ -57,6 +57,26 @@ export interface ProviderCallDetails extends ProviderCallResult {
   endedAt?: string;
 }
 
+export interface CreateWebCallParams {
+  providerAgentId: string;
+  dynamicVariables?: Record<string, string>;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProviderWebCallResult {
+  providerCallId: string;
+  accessToken: string;
+  transport?: 'gateway' | 'livekit';
+  iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }>;
+  isMock: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DeleteRecordingResult {
+  providerDeleted: boolean;
+  message: string;
+}
+
 export interface IVoiceProvider {
   readonly providerName: 'mock' | 'retell';
   readonly isMock: boolean;
@@ -67,5 +87,8 @@ export interface IVoiceProvider {
   deleteAgent(providerAgentId: string): Promise<void>;
 
   createPhoneCall(params: CreateCallParams): Promise<ProviderCallResult>;
+  createWebCall(params: CreateWebCallParams): Promise<ProviderWebCallResult>;
   getCallDetails(providerCallId: string): Promise<ProviderCallDetails>;
+  deleteRecording(providerCallId: string): Promise<DeleteRecordingResult>;
 }
+

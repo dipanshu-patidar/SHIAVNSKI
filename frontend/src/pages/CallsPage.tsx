@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   PhoneCall,
@@ -14,11 +14,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  Mic,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { callApi, Call, CallStatus } from '../api/call.api';
 import { agentApi, Agent } from '../api/agent.api';
 import { useToast } from '../context/ToastContext';
 import { CallDetailsModal } from '../components/calls/CallDetailsModal';
+import { WebVoiceCallModal } from '../components/calls/WebVoiceCallModal';
 
 export const CallsPage: React.FC = () => {
   const toast = useToast();
@@ -40,7 +44,10 @@ export const CallsPage: React.FC = () => {
   // Selected Call for Details Modal
   const [selectedCall, setSelectedCall] = useState<Call | null>(null);
 
-  // Load user's agents for dropdown filter
+  // Browser Voice Conversation Modal State
+  const [webCallModalOpen, setWebCallModalOpen] = useState<boolean>(false);
+
+  // Load user's agents for dropdown filter and browser call selection
   useEffect(() => {
     async function loadAgents() {
       try {
@@ -52,6 +59,15 @@ export const CallsPage: React.FC = () => {
     }
     loadAgents();
   }, []);
+
+  const defaultAgent = useMemo(() => {
+    return (
+      agents.find((a) => a.providerAgentId === 'agent_ba6661e78710d75a9fe62d6451' || a.name.includes('Shiavnski')) ||
+      agents.find((a) => a.isActive) ||
+      agents[0] ||
+      null
+    );
+  }, [agents]);
 
   const toastRef = React.useRef(toast);
   toastRef.current = toast;
@@ -122,6 +138,51 @@ export const CallsPage: React.FC = () => {
     }
   };
 
+  const getCallTypeBadge = (callType?: string) => {
+    const isWeb = callType === 'web_call';
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+          isWeb
+            ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20'
+            : 'bg-slate-800/80 text-slate-300 border border-slate-700'
+        }`}
+      >
+        {isWeb ? <Mic className="w-3 h-3 text-indigo-400" /> : <PhoneCall className="w-3 h-3 text-slate-400" />}
+        {isWeb ? 'Browser Web Call' : 'Phone Call'}
+      </span>
+    );
+  };
+
+  const getRecordingBadge = (call: Call) => {
+    if (call.recordingUrl) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <Volume2 className="w-3 h-3" /> Available
+        </span>
+      );
+    }
+    if (call.recordingStatus === 'removed') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+          <VolumeX className="w-3 h-3" /> Removed
+        </span>
+      );
+    }
+    if (call.status === 'ENDED') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+          No Recording
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        Processing
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-6 w-full">
       {/* Page Header */}
@@ -137,16 +198,28 @@ export const CallsPage: React.FC = () => {
             </span>
           </div>
           <p className="text-sm text-slate-400 mt-1">
-            Browse paginated call records, inspect recipient metadata, and monitor telemetry persisted in PostgreSQL.
+            Browse paginated call records, inspect recordings & transcripts, and manage real-time browser voice sessions.
           </p>
         </div>
 
-        <Link
-          to="/call/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02] shrink-0"
-        >
-          <PhoneOutgoing className="w-4 h-4" /> Dispatch Call
-        </Link>
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Prominent Start Voice Conversation Button (Requirement 1 & 3) */}
+          <button
+            type="button"
+            id="start-browser-call-header-btn"
+            onClick={() => setWebCallModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02]"
+          >
+            <Mic className="w-4 h-4" /> Start Voice Conversation
+          </button>
+
+          <Link
+            to="/call/new"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all hover:scale-[1.02]"
+          >
+            <PhoneOutgoing className="w-4 h-4" /> Outbound Call
+          </Link>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -156,7 +229,7 @@ export const CallsPage: React.FC = () => {
           <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search by destination phone or call ID..."
+            placeholder="Search by destination phone, agent, or call ID..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -239,16 +312,17 @@ export const CallsPage: React.FC = () => {
       {/* Calls Table Card */}
       <div className="glass-card rounded-3xl border border-slate-800/80 bg-[#0F1523]/90 overflow-hidden shadow-xl w-full">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm min-w-[700px]">
+          <table className="w-full text-left text-sm min-w-[850px]">
             <thead className="text-xs uppercase tracking-wider text-slate-400 bg-slate-900/60 border-b border-slate-800/60">
               <tr>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Destination (Masked)</th>
-                <th className="px-6 py-4">Voice Agent</th>
-                <th className="px-6 py-4">Provider Call ID</th>
-                <th className="px-6 py-4">Duration</th>
-                <th className="px-6 py-4">Timestamp</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-5 py-4">Status</th>
+                <th className="px-5 py-4">Call Type</th>
+                <th className="px-5 py-4">Destination / Origin</th>
+                <th className="px-5 py-4">Voice Agent</th>
+                <th className="px-5 py-4">Recording</th>
+                <th className="px-5 py-4">Duration</th>
+                <th className="px-5 py-4">Date & Time</th>
+                <th className="px-5 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50 text-slate-300">
@@ -256,33 +330,36 @@ export const CallsPage: React.FC = () => {
                 // Loading Skeleton Rows
                 [1, 2, 3, 4, 5].map((n) => (
                   <tr key={n} className="animate-pulse">
-                    <td className="px-6 py-4">
-                      <div className="w-20 h-5 bg-slate-800 rounded-full" />
+                    <td className="px-5 py-4">
+                      <div className="w-16 h-5 bg-slate-800 rounded-full" />
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="w-28 h-4 bg-slate-800 rounded" />
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="w-32 h-4 bg-slate-800 rounded" />
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="w-36 h-4 bg-slate-800 rounded" />
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="w-12 h-4 bg-slate-800 rounded" />
-                    </td>
-                    <td className="px-6 py-4">
+                    <td className="px-5 py-4">
                       <div className="w-24 h-4 bg-slate-800 rounded" />
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="w-16 h-4 bg-slate-800 rounded ml-auto" />
+                    <td className="px-5 py-4">
+                      <div className="w-24 h-4 bg-slate-800 rounded" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="w-28 h-4 bg-slate-800 rounded" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="w-16 h-4 bg-slate-800 rounded" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="w-12 h-4 bg-slate-800 rounded" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="w-20 h-4 bg-slate-800 rounded" />
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="w-14 h-4 bg-slate-800 rounded ml-auto" />
                     </td>
                   </tr>
                 ))
               ) : calls.length === 0 ? (
                 // Empty State Row
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mb-3">
                         <PhoneCall className="w-7 h-7" />
@@ -295,20 +372,30 @@ export const CallsPage: React.FC = () => {
                       <p className="text-xs text-slate-400 mt-1 max-w-sm">
                         {searchQuery || statusFilter !== 'ALL'
                           ? 'Try clearing your search query or status filter to see all records.'
-                          : 'Initiate your first outbound call to test persona behavior and monitor real-time call states.'}
+                          : 'Start a browser voice conversation to speak directly with your AI agent, or dispatch an outbound telephony call.'}
                       </p>
-                      <Link
-                        to="/call/new"
-                        className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/30"
-                      >
-                        <PhoneOutgoing className="w-3.5 h-3.5" /> Dispatch Outbound Call
-                      </Link>
+                      <div className="mt-4 flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setWebCallModalOpen(true)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/30"
+                        >
+                          <Mic className="w-3.5 h-3.5" /> Start Voice Conversation
+                        </button>
+                        <Link
+                          to="/call/new"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all border border-slate-700"
+                        >
+                          <PhoneOutgoing className="w-3.5 h-3.5" /> Dispatch Outbound Call
+                        </Link>
+                      </div>
                     </div>
                   </td>
                 </tr>
               ) : (
                 // Call Rows
                 calls.map((call) => {
+                  const isWebCall = call.callType === 'web_call';
                   const isMock = call.isMock ?? call.providerCallId.startsWith('call_mock_');
 
                   return (
@@ -317,36 +404,23 @@ export const CallsPage: React.FC = () => {
                       className="hover:bg-slate-900/40 transition-colors group"
                     >
                       {/* Status */}
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-5 py-4 whitespace-nowrap">
                         {getStatusBadge(call.status)}
                       </td>
 
-                      {/* Masked Destination Number */}
-                      <td className="px-6 py-4 font-mono text-sm text-white font-medium whitespace-nowrap">
-                        {call.maskedToNumber || call.toNumber}
+                      {/* Call Type */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        {getCallTypeBadge(call.callType)}
                       </td>
 
-                      {/* Agent */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <Bot className="w-4 h-4 text-blue-400 shrink-0" />
-                          <div>
-                            <p className="text-xs font-semibold text-white truncate max-w-[160px]">
-                              {call.agent?.name || 'Agent Persona'}
-                            </p>
-                            <p className="text-[10px] text-slate-400 font-mono">
-                              {call.agent?.voiceId || 'Default'}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Provider Call ID */}
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      {/* Destination / Recipient */}
+                      <td className="px-5 py-4 font-mono text-xs text-white font-medium whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
-                          <code className="text-xs font-mono text-slate-300 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                            {call.providerCallId}
-                          </code>
+                          {isWebCall ? (
+                            <span className="text-indigo-300 font-sans">Browser Client</span>
+                          ) : (
+                            <span>{call.maskedToNumber || call.toNumber}</span>
+                          )}
                           {isMock && (
                             <span className="text-[9px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
                               MOCK
@@ -355,13 +429,33 @@ export const CallsPage: React.FC = () => {
                         </div>
                       </td>
 
+                      {/* Agent */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <Bot className="w-4 h-4 text-blue-400 shrink-0" />
+                          <div>
+                            <p className="text-xs font-semibold text-white truncate max-w-[140px]">
+                              {call.agent?.name || 'Agent Persona'}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-mono">
+                              {call.agent?.voiceId || 'Default Voice'}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Recording Availability */}
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        {getRecordingBadge(call)}
+                      </td>
+
                       {/* Duration */}
-                      <td className="px-6 py-4 text-xs font-mono text-slate-300 whitespace-nowrap">
+                      <td className="px-5 py-4 text-xs font-mono text-slate-300 whitespace-nowrap">
                         {formatDuration(call.durationSeconds)}
                       </td>
 
                       {/* Timestamp */}
-                      <td className="px-6 py-4 text-xs text-slate-400 whitespace-nowrap">
+                      <td className="px-5 py-4 text-xs text-slate-400 whitespace-nowrap">
                         {new Date(call.createdAt).toLocaleDateString([], {
                           month: 'short',
                           day: 'numeric',
@@ -371,7 +465,7 @@ export const CallsPage: React.FC = () => {
                       </td>
 
                       {/* Action */}
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
                         <button
                           onClick={() => setSelectedCall(call)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-400 hover:text-white hover:bg-blue-600/20 border border-blue-500/20 transition-all"
@@ -432,6 +526,16 @@ export const CallsPage: React.FC = () => {
         onCallUpdated={(updated) => {
           setSelectedCall(updated);
           setCalls((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+        }}
+      />
+
+      {/* Browser Web Voice Conversation Modal */}
+      <WebVoiceCallModal
+        isOpen={webCallModalOpen}
+        agent={defaultAgent}
+        onClose={() => setWebCallModalOpen(false)}
+        onCallCompleted={(_call) => {
+          fetchCalls();
         }}
       />
     </div>

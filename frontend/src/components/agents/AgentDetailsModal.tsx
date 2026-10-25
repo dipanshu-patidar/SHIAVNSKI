@@ -81,22 +81,34 @@ export const AgentDetailsModal: React.FC<AgentDetailsModalProps> = ({
         {/* Content Body */}
         <div className="overflow-y-auto p-6 space-y-5 flex-1">
           {/* Provider Transparency Callout */}
-          <div className="rounded-2xl p-4 bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-start gap-2.5 text-amber-300">
-              <Radio className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div
+            className={`rounded-2xl p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+              isMock
+                ? 'bg-amber-500/10 border-amber-500/25 text-amber-300'
+                : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-300'
+            }`}
+          >
+            <div className="flex items-start gap-2.5">
+              <Radio className={`w-4 h-4 shrink-0 mt-0.5 ${isMock ? 'text-amber-400' : 'text-emerald-400'}`} />
               <div>
-                <p className="font-semibold text-amber-200">
-                  {isMock ? 'Provider Mode: MOCK / SIMULATED' : 'Provider Mode: Retell Live'}
+                <p className={`font-semibold ${isMock ? 'text-amber-200' : 'text-emerald-200'}`}>
+                  {isMock ? 'Provider Mode: MOCK / SIMULATED' : 'Provider Mode: RETELL LIVE'}
                 </p>
-                <p className="text-amber-300/80 mt-0.5">
+                <p className={`mt-0.5 ${isMock ? 'text-amber-300/80' : 'text-emerald-300/80'}`}>
                   {isMock
                     ? 'Deterministic local simulation. Retell cloud API credentials are not consumed.'
-                    : 'Synced with live Retell AI cloud infrastructure.'}
+                    : 'Synced with live Retell AI cloud infrastructure and official Retell SDK.'}
                 </p>
               </div>
             </div>
-            <span className="shrink-0 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 font-mono text-[11px] font-bold self-start sm:self-center">
-              MOCK/SIMULATED
+            <span
+              className={`shrink-0 px-2.5 py-1 rounded-full font-mono text-[11px] font-bold self-start sm:self-center ${
+                isMock
+                  ? 'bg-amber-500/20 text-amber-300'
+                  : 'bg-emerald-500/20 text-emerald-300'
+              }`}
+            >
+              {isMock ? 'MOCK/SIMULATED' : 'RETELL LIVE'}
             </span>
           </div>
 

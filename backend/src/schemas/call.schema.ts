@@ -50,6 +50,26 @@ export const dashboardMetricsQuerySchema = z.object({
   status: z.enum(['INITIATED', 'ONGOING', 'ENDED', 'FAILED', 'ALL']).optional(),
 });
 
+export const createWebCallSchema = z.object({
+  agentId: z
+    .string({ required_error: 'Voice agent selection is required' })
+    .trim()
+    .min(1, 'Agent ID is required'),
+  dynamicVariables: z
+    .record(
+      z
+        .string()
+        .regex(
+          /^[a-zA-Z0-9_]{1,50}$/,
+          'Variable keys must be alphanumeric or underscores (up to 50 characters)'
+        ),
+      z.string().max(500, 'Variable values must not exceed 500 characters')
+    )
+    .optional(),
+});
+
 export type CreateCallInput = z.infer<typeof createCallSchema>;
+export type CreateWebCallInput = z.infer<typeof createWebCallSchema>;
 export type ListCallsQuery = z.infer<typeof listCallsQuerySchema>;
 export type DashboardMetricsQuery = z.infer<typeof dashboardMetricsQuerySchema>;
+
