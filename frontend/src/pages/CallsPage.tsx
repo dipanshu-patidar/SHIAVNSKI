@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import {
   PhoneCall,
   Search,
@@ -9,7 +8,6 @@ import {
   Clock,
   Radio,
   Eye,
-  PhoneOutgoing,
   Bot,
   ChevronLeft,
   ChevronRight,
@@ -203,22 +201,15 @@ export const CallsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* Prominent Start Voice Conversation Button (Requirement 1 & 3) */}
+          {/* Prominent Start Voice Conversation Button */}
           <button
             type="button"
             id="start-browser-call-header-btn"
             onClick={() => setWebCallModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02]"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30 transition-all hover:scale-[1.02]"
           >
             <Mic className="w-4 h-4" /> Start Voice Conversation
           </button>
-
-          <Link
-            to="/call/new"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all hover:scale-[1.02]"
-          >
-            <PhoneOutgoing className="w-4 h-4" /> Outbound Call
-          </Link>
         </div>
       </div>
 
@@ -372,22 +363,16 @@ export const CallsPage: React.FC = () => {
                       <p className="text-xs text-slate-400 mt-1 max-w-sm">
                         {searchQuery || statusFilter !== 'ALL'
                           ? 'Try clearing your search query or status filter to see all records.'
-                          : 'Start a browser voice conversation to speak directly with your AI agent, or dispatch an outbound telephony call.'}
+                          : 'Start a browser voice conversation to speak directly with your AI agent.'}
                       </p>
-                      <div className="mt-4 flex items-center gap-3">
+                      <div className="mt-4 flex items-center justify-center gap-3">
                         <button
                           type="button"
                           onClick={() => setWebCallModalOpen(true)}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/30"
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shadow-blue-600/30 hover:scale-[1.02]"
                         >
                           <Mic className="w-3.5 h-3.5" /> Start Voice Conversation
                         </button>
-                        <Link
-                          to="/call/new"
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all border border-slate-700"
-                        >
-                          <PhoneOutgoing className="w-3.5 h-3.5" /> Dispatch Outbound Call
-                        </Link>
                       </div>
                     </div>
                   </td>

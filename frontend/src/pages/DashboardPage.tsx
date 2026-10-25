@@ -16,6 +16,7 @@ import {
   Eye,
   Bot,
   Radio,
+  Mic,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { callApi, Call, DashboardMetrics, CallStatus } from '../api/call.api';
@@ -200,11 +201,11 @@ export const DashboardPage: React.FC = () => {
           </button>
 
           <Link
-            to="/call/new"
+            to="/calls"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 transition-all hover:scale-[1.02]"
           >
-            <PhoneCall className="w-4 h-4" />
-            <span>Launch Outbound Call</span>
+            <Mic className="w-4 h-4" />
+            <span>Start Voice Conversation</span>
           </Link>
         </div>
       </div>
@@ -432,15 +433,15 @@ export const DashboardPage: React.FC = () => {
             </div>
             <h4 className="text-sm font-semibold text-slate-200">No call records found</h4>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              No outbound calls matching your filter criteria are persisted in the database.
+              No voice conversation records matching your filter criteria are persisted in the database.
             </p>
             <div className="mt-4">
               <Link
-                to="/call/new"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                to="/calls"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors shadow-md shadow-blue-600/20"
               >
-                <PhoneCall className="w-3.5 h-3.5" />
-                Launch First Call
+                <Mic className="w-3.5 h-3.5" />
+                Start Voice Conversation
               </Link>
             </div>
           </div>

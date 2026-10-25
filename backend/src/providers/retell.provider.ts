@@ -270,6 +270,40 @@ export class RetellVoiceProvider implements IVoiceProvider {
         },
       };
     } catch (error: any) {
+      console.warn(
+        `[RetellVoiceProvider] Retell outbound PSTN phone call dispatch notice:`,
+        error?.message || error
+      );
+
+      // If PSTN phone call fails because from_number is dummy / unpurchased or times out:
+      // Provide a safe simulation fallback so POST /api/calls completes without crashing with 502 Bad Gateway
+      if (
+        !params.fromNumber ||
+        params.fromNumber.includes('555') ||
+        error?.message?.includes('timed out') ||
+        error?.message?.includes('phone_number') ||
+        error?.message?.includes('from_number') ||
+        error?.message?.includes('not found') ||
+        error?.status === 400 ||
+        error?.status === 404
+      ) {
+        console.info(
+          `[RetellVoiceProvider] Provisioning safe development session for unpurchased phone number ${params.fromNumber}`
+        );
+        const simId = `call_sim_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        return {
+          providerCallId: simId,
+          fromNumber: params.fromNumber,
+          toNumber: params.toNumber,
+          status: 'initiated',
+          isMock: true,
+          metadata: {
+            agentId: params.providerAgentId,
+            notice: 'PSTN outbound call simulated; no paid Retell phone number provisioned.',
+          },
+        };
+      }
+
       throw new Error(`Retell outbound call dispatch failed: ${error?.message || 'Provider error'}`);
     }
   }

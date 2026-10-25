@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { PhoneCall, Radio, Sparkles, Menu } from 'lucide-react';
+import { Mic, Radio, Sparkles, Menu } from 'lucide-react';
 
 interface NavbarProps {
   onToggleMobileMenu?: () => void;
@@ -15,8 +15,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
   const getPageTitle = () => {
     if (location.pathname === '/' || location.pathname === '/dashboard') return 'Dashboard';
     if (location.pathname.startsWith('/agents')) return 'Voice Agents';
-    if (location.pathname.startsWith('/calls/new') || location.pathname.startsWith('/call/new')) return 'Dispatch Call';
-    if (location.pathname.startsWith('/calls')) return 'Call History';
+    if (location.pathname.startsWith('/calls')) return 'Call Records';
     return 'Voice Console';
   };
 
@@ -67,13 +66,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
           </span>
         </div>
 
-        {/* Quick Launch Call Button */}
+        {/* Quick Voice Conversation Navigation Button */}
         <Link
-          to="/call/new"
+          to="/calls"
           className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs font-semibold rounded-xl bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/25 transition-all hover:scale-[1.02] shrink-0"
         >
-          <PhoneCall className="w-3.5 h-3.5 shrink-0" />
-          <span className="hidden sm:inline">Dispatch Call</span>
+          <Mic className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden sm:inline">Voice Console</span>
         </Link>
       </div>
     </header>

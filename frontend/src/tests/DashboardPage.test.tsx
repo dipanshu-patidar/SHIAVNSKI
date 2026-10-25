@@ -194,7 +194,7 @@ describe('Dynamic Dashboard Page (DashboardPage)', () => {
 
     await waitFor(() => {
       expect(screen.getByText('No call records found')).toBeInTheDocument();
-      expect(screen.getByText('Launch First Call')).toBeInTheDocument();
+      expect(screen.getAllByText('Start Voice Conversation').length).toBeGreaterThan(0);
     });
 
     // Confirm 0 values in KPI cards without NaN or division errors

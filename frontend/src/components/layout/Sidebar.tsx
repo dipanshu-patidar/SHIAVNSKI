@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Bot,
   Phone,
-  PhoneOutgoing,
   ChevronDown,
   ShieldCheck,
   Radio,
@@ -34,7 +33,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
     { to: '/agents', label: 'Voice Agents', icon: Bot },
     { to: '/calls', label: 'Call Records', icon: Phone },
-    { to: '/call/new', label: 'Dispatch Call', icon: PhoneOutgoing },
   ];
 
   const isItemActive = (to: string, exact?: boolean) => {

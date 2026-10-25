@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
@@ -7,7 +7,6 @@ import { Layout } from './components/layout/Layout';
 import { DashboardPage } from './pages/DashboardPage';
 import { AgentsPage } from './pages/AgentsPage';
 import { CallsPage } from './pages/CallsPage';
-import { NewCallPage } from './pages/NewCallPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 
@@ -28,8 +27,8 @@ export const App: React.FC = () => {
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/agents" element={<AgentsPage />} />
                 <Route path="/calls" element={<CallsPage />} />
-                <Route path="/calls/new" element={<NewCallPage />} />
-                <Route path="/call/new" element={<NewCallPage />} />
+                <Route path="/calls/new" element={<Navigate to="/calls" replace />} />
+                <Route path="/call/new" element={<Navigate to="/calls" replace />} />
               </Route>
             </Route>
 
